@@ -1,38 +1,35 @@
-import os
+import os, csv
+from datetime import datetime
 from telegram import Update
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
+from telegram.ext import ApplicationBuilder, MessageHandler, ContextTypes, filters
 
-BOT_TOKEN = os.getenv("BOT_TOKEN")
+TOKEN = os.getenv("BOT_TOKEN")
+CSV_FILE = 'report.csv'
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("歡迎使用報帳機器人！請輸入格式：銀行 收入 介紹人 介紹費")
+def init_csv():
+    if not os.path.exists(CSV_FILE):
+        with open(CSV_FILE, 'w', newline='') as f:
+            csv.writer(f).writerow(["日期", "銀行", "收入", "介紹人", "介紹費", "實拿"])
 
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
-        text = update.message.text.strip()
-        parts = text.split()
-        if len(parts) != 4:
-            raise ValueError("輸入格式錯誤，請輸入：銀行 收入 介紹人 介紹費")
-        bank, income_str, introducer, fee_str = parts
-        income = int(income_str)
-        fee = int(fee_str)
-        net_income = income - fee
-        response = (
-            f"✅ 記錄成功\n"
-            f"銀行：{bank}\n"
-            f"收入：{income}\n"
-            f"介紹人：{introducer}\n"
-            f"介紹費：{fee}\n"
-            f"實拿：{net_income}"
-        )
-        await update.message.reply_text(response)
-    except Exception as e:
-        await update.message.reply_text(str(e))
+        bank, income, referrer, fee = update.message.text.strip().split()
+        income, fee = float(income), float(fee)
+        net = income - fee
+    except:
+        await update.message.reply_text("請用格式：銀行 收入 介紹人 介紹費\n例如：玉山 5000 小明 200")
+        return
+
+    row = [datetime.now().strftime("%Y-%m-%d"), bank, income, referrer, fee, net]
+    with open(CSV_FILE, 'a', newline='') as f:
+        csv.writer(f).writerow(row)
+
+    await update.message.reply_text(f"✅ 記錄成功\n銀行：{bank}\n收入：{income}\n介紹人：{referrer}\n介紹費：{fee}\n實拿：{net}")
 
 def main():
-    app = ApplicationBuilder().token(BOT_TOKEN).build()
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    init_csv()
+    app = ApplicationBuilder().token(TOKEN).build()
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle))
     app.run_polling()
 
 if __name__ == "__main__":
